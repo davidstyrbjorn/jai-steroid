@@ -6,8 +6,8 @@ Simp :: #import "Simp";
 #import "Math";
 #import "Input";
 
-ASPECT :: (16.0/10.0);
-WINDOW_HEIGHT :: cast(s32)900;
+ASPECT :: (10.0/10.0);
+WINDOW_HEIGHT :: cast(s32)1200;
 WINDOW_WIDTH :: cast(s32)(WINDOW_HEIGHT * ASPECT);
 
 // Just for fun.
@@ -19,14 +19,12 @@ data_folder: string;
 should_quit_game: bool = false;
 
 ship_texture: Simp.Texture;
-ship_width := 64.0;
-ship_height := 64.0;
+ship_width := 32.0;
+ship_height := 32.0;
 ship_pos := Vector2.{300, 300};
 ship_theta := 0.0;
 ship_force := Vector2.{0, 0};
-time_until_max_force := 2; 
-thrust_timer := 0.0;
-
+ship_velocity := Vector2.{0, 0};
 
 key_left: bool;
 key_right: bool;
@@ -58,37 +56,54 @@ main :: () {
 
     /* RENDER NOW */
     Simp.clear_render_target(0, 0, 0, 1);
+    
     {
       text_w := Simp.prepare_text(title_font, "asteroids");
       text_y := WINDOW_HEIGHT - title_font.character_height;
       color := Vector4.{1, 1, 1, 1};
       Simp.draw_prepared_text(title_font, 0, text_y, color);
     }
+
+    {
+      ship_debug_str := tprint("force, velocity = {%, %}, {%, %}", ship_force.x.(s64), ship_force.y.(s64), ship_velocity.x.(s64), ship_velocity.y.(s64));
+      text_w := Simp.prepare_text(title_font, ship_debug_str);
+      text_y := WINDOW_HEIGHT - title_font.character_height*2;
+      color := Vector4.{1, 1, 1, 1};
+      Simp.draw_prepared_text(title_font, 0, text_y, color);
+    }
+
     draw_ship_at(ship_pos);
     Simp.swap_buffers(window);
 
     /* SIMULATE */
     update_keys();
     if key_right {
-      ship_theta -= 60.0 * delta_time;
+      ship_theta -= 120.0 * delta_time;
     }
     else if key_left {
-      ship_theta += 60.0 * delta_time;
+      ship_theta += 120.0 * delta_time;
     }
     if key_space {
-      thrust_timer := min(thrust_timer + delta_time, time_until_max_force);
       thrust_forward_ship();
-    }else {
-      thrust_timer = 0.0;
     }
+
+    simulate_ship();
   }
+}
+
+simulate_ship :: () {
+  damping_force := -2.5 * ship_force * delta_time;
+  ship_force += damping_force;
+
+  ship_velocity = ship_force * delta_time;
+  ship_pos += ship_velocity;
 }
 
 thrust_forward_ship :: () {
   up_vector := Vector2.{0, 1};
   radians := (TAU / 360.0) * ship_theta;
   forward_vector := rotate(up_vector, radians);
-  ship_pos += forward_vector * delta_time * 500.0;
+  ship_force += forward_vector * 1000.0 * delta_time;
 }
 
 update_keys :: inline () {
