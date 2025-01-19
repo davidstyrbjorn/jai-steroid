@@ -7,6 +7,8 @@ Simp :: #import "Simp";
 #import "Input";
 #import "Random";
 
+#load "2d_collision.jai";
+
 ASPECT :: (10.0/10.0);
 WINDOW_HEIGHT :: cast(s32)1200;
 WINDOW_WIDTH :: cast(s32)(WINDOW_HEIGHT * ASPECT);
@@ -34,7 +36,6 @@ key_shift: bool;
 SMALL_ASTEROID :: 0;
 MEDIUM_ATEROID :: 1;
 BIG_ASTEROID :: 2;
-MAX_ASTEROIDS :: 256;
 
 Asteroid :: struct {
   alive: bool;
@@ -47,8 +48,8 @@ Asteroid :: struct {
 }
 
 asteroid_textures: [3]Simp.Texture;
-asteroids: [MAX_ASTEROIDS]Asteroid;
-time_until_asteroid_spawn := 1.0;
+asteroids: [..]Asteroid;
+time_until_asteroid_spawn := 4.0;
 
 delta_time: float32;
 
@@ -67,6 +68,9 @@ main :: () {
 
   delta_time = 0.016;
   last_time: float64 = 0;
+
+  // Alloc some space up front for our asteroids array
+  array_resize(*asteroids, 250);
 
   while !should_quit_game {
     reset_temporary_storage();
@@ -110,9 +114,6 @@ main :: () {
     if key_space {
       thrust_forward_ship();
     }
-    if key_shift {
-      spawn_asteroid(MEDIUM_ATEROID);
-    }
 
     simulate_ship();
     simulate_asteroids();
@@ -122,17 +123,29 @@ main :: () {
 simulate_asteroids :: () {
   time_until_asteroid_spawn -= delta_time;
   if time_until_asteroid_spawn < 0.0 {
-    time_until_asteroid_spawn = 1.0;
+    time_until_asteroid_spawn = 4.0;
     spawn_asteroid(MEDIUM_ATEROID);
   }
 
   for *asteroids {
-    if !it.alive {
-      continue;
-    }
-
     it.theta += it.angular_velocity * delta_time;
     it.position += it.velocity * delta_time;
+    
+    // Check collision between asteroid and ship
+    h := Vector2.{ship_size.x, 0};
+    v := Vector2.{0, ship_size.y};
+
+    radians := (TAU / 360.0) * ship_theta;
+
+    h = rotate(h, radians);
+    v = rotate(v, radians);
+
+    t0 := ship_pos;
+    t1 := ship_pos + Vector2.{ship_size.x, 0};
+    t2 := ship_pos + Vector2.{ship_size.x/2, ship_size.y};
+    if triangle_intersect_circle(it.position, 128, t0, t1, t2) {
+      remove it;
+    }
   }
 }
 
@@ -199,36 +212,24 @@ get_random_point_outside_of_play_area :: (thing_size: Vector2) -> Vector2 {
 }
 
 spawn_asteroid :: (type: int) {
-  for asteroids {
-    if it.alive {
-      continue;
-    }
-
-    size := Vector2.{128, 128};
-    position := get_random_point_outside_of_play_area(size);
-    center := Vector2.{(WINDOW_WIDTH/2).(float), (WINDOW_HEIGHT/2).(float)};
-    velocity := normalize(center - position) * 100.0;
-    angular_velocity := random_get_within_range(-50.0, 50.0);
-
-    asteroids[it_index] = Asteroid.{
-      true,
-      type,
-      position,
-      size,
-      velocity,
-      0.0,
-      angular_velocity
-    };
-
-    break;
-  }
+  size := Vector2.{128, 128};
+  position := get_random_point_outside_of_play_area(size);
+  center := Vector2.{(WINDOW_WIDTH/2).(float), (WINDOW_HEIGHT/2).(float)};
+  velocity := normalize(center - position) * 100.0;
+  angular_velocity := random_get_within_range(-50.0, 50.0);
+  array_add(*asteroids, Asteroid.{
+    true,
+    type,
+    position,
+    size,
+    velocity,
+    0.0,
+    angular_velocity
+  });
 }
 
 draw_asteroids :: () {
   for asteroids {
-    if !it.alive {
-      continue;
-    }
     my_draw_immediate(*asteroid_textures[it.type], it.position, it.size, it.theta);
   }
 }
@@ -237,7 +238,7 @@ init_textures :: () {
   ship_texture = load_texture("ship.png");
 
   // asteroid_textures[SMALL_ASTEROID] = load_texture("");
-  asteroid_textures[MEDIUM_ATEROID] = load_texture("medium-asteroid.png");
+  asteroid_textures[MEDIUM_ATEROID] = load_texture("asteroid-256-256.png");
   // asteroid_textures[SMALL_ASTEROID] = load_texture("");
 }
 
