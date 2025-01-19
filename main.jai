@@ -5,6 +5,7 @@
 Simp :: #import "Simp";
 #import "Math";
 #import "Input";
+#import "Random";
 
 ASPECT :: (10.0/10.0);
 WINDOW_HEIGHT :: cast(s32)1200;
@@ -19,8 +20,7 @@ data_folder: string;
 should_quit_game: bool = false;
 
 ship_texture: Simp.Texture;
-ship_width := 32.0;
-ship_height := 32.0;
+ship_size := Vector2.{32, 32};
 ship_pos := Vector2.{300, 300};
 ship_theta := 0.0;
 ship_force := Vector2.{0, 0};
@@ -31,6 +31,25 @@ key_right: bool;
 key_space: bool;
 key_shift: bool;
 
+SMALL_ASTEROID :: 0;
+MEDIUM_ATEROID :: 1;
+BIG_ASTEROID :: 2;
+MAX_ASTEROIDS :: 256;
+
+Asteroid :: struct {
+  alive: bool;
+  type: int;
+  position: Vector2;
+  size: Vector2;
+  velocity: Vector2;
+  theta: float;
+  angular_velocity: float;
+}
+
+asteroid_textures: [3]Simp.Texture;
+asteroids: [MAX_ASTEROIDS]Asteroid;
+time_until_asteroid_spawn := 1.0;
+
 delta_time: float32;
 
 main :: () {
@@ -39,6 +58,9 @@ main :: () {
 
   window := create_window(window_name="Asteroids", width=WINDOW_WIDTH, height=WINDOW_HEIGHT);
   Simp.set_render_target(window);
+
+  seed := to_calendar(current_time_consensus()).millisecond;
+  random_seed(seed.(u64));
 
   init_textures();
   init_fonts();
@@ -72,7 +94,9 @@ main :: () {
       Simp.draw_prepared_text(title_font, 0, text_y, color);
     }
 
-    draw_ship_at(ship_pos);
+    draw_ship();
+    draw_asteroids();
+
     Simp.swap_buffers(window);
 
     /* SIMULATE */
@@ -86,8 +110,29 @@ main :: () {
     if key_space {
       thrust_forward_ship();
     }
+    if key_shift {
+      spawn_asteroid(MEDIUM_ATEROID);
+    }
 
     simulate_ship();
+    simulate_asteroids();
+  }
+}
+
+simulate_asteroids :: () {
+  time_until_asteroid_spawn -= delta_time;
+  if time_until_asteroid_spawn < 0.0 {
+    time_until_asteroid_spawn = 1.0;
+    spawn_asteroid(MEDIUM_ATEROID);
+  }
+
+  for *asteroids {
+    if !it.alive {
+      continue;
+    }
+
+    it.theta += it.angular_velocity * delta_time;
+    it.position += it.velocity * delta_time;
   }
 }
 
@@ -115,10 +160,10 @@ update_keys :: inline () {
 
     if event.type == .KEYBOARD {
       key := event.key_code;
-      if key == .ARROW_LEFT  then key_left  = cast(bool)event.key_pressed;
-      if key == .ARROW_RIGHT then key_right = cast(bool)event.key_pressed;
-      if key == .SPACEBAR    then key_space = cast(bool)event.key_pressed;
-      if key == .SHIFT       then key_shift = cast(bool)event.key_pressed;
+      if key == .ARROW_LEFT  then key_left  = event.key_pressed.(bool);
+      if key == .ARROW_RIGHT then key_right = event.key_pressed.(bool);
+      if key == .SPACEBAR    then key_space = event.key_pressed.(bool);
+      if key == .SHIFT       then key_shift = event.key_pressed.(bool);
     }
   }
 }
@@ -130,17 +175,83 @@ load_texture :: (name: string) -> Simp.Texture, bool {
   return result, success;
 }
 
-init_textures :: () {
-  ship_texture = load_texture("ship.png");
+get_random_point_outside_of_play_area :: (thing_size: Vector2) -> Vector2 {
+  side := random_get_within_range(0, 3.999).(u8); // Ugly
+  result: Vector2;
+  if side == {
+    case 0; // left side
+      result.x = -thing_size.x;
+      result.y = random_get_within_range(thing_size.y, WINDOW_HEIGHT-thing_size.y);
+    case 1; // right side 
+      result.x = WINDOW_WIDTH.(float) + thing_size.x;
+      result.y = random_get_within_range(thing_size.y, WINDOW_HEIGHT-thing_size.y);
+    case 2; // top side
+      result.x = random_get_within_range(0, WINDOW_WIDTH-thing_size.x);
+      result.y = WINDOW_HEIGHT + thing_size.y;
+    case 3; // bottom side
+      result.x = random_get_within_range(0, WINDOW_WIDTH-thing_size.x);
+      result.y = -thing_size.y;
+    case;
+      print("wtf this shouldn't happen!?!?");
+  }
+  
+  return result;
 }
 
-draw_ship_at :: (pos: Vector2) {
-  Simp.set_shader_for_images(*ship_texture);
+spawn_asteroid :: (type: int) {
+  for asteroids {
+    if it.alive {
+      continue;
+    }
 
-  h := Vector2.{ship_width, 0};
-  v := Vector2.{0, ship_height};
+    size := Vector2.{128, 128};
+    position := get_random_point_outside_of_play_area(size);
+    center := Vector2.{(WINDOW_WIDTH/2).(float), (WINDOW_HEIGHT/2).(float)};
+    velocity := normalize(center - position) * 100.0;
+    angular_velocity := random_get_within_range(-50.0, 50.0);
 
-  radians := (TAU / 360.0) * ship_theta;
+    asteroids[it_index] = Asteroid.{
+      true,
+      type,
+      position,
+      size,
+      velocity,
+      0.0,
+      angular_velocity
+    };
+
+    break;
+  }
+}
+
+draw_asteroids :: () {
+  for asteroids {
+    if !it.alive {
+      continue;
+    }
+    my_draw_immediate(*asteroid_textures[it.type], it.position, it.size, it.theta);
+  }
+}
+
+init_textures :: () {
+  ship_texture = load_texture("ship.png");
+
+  // asteroid_textures[SMALL_ASTEROID] = load_texture("");
+  asteroid_textures[MEDIUM_ATEROID] = load_texture("medium-asteroid.png");
+  // asteroid_textures[SMALL_ASTEROID] = load_texture("");
+}
+
+draw_ship :: () {
+  my_draw_immediate(*ship_texture, ship_pos, ship_size, ship_theta);
+}
+
+my_draw_immediate :: (texture: *Simp.Texture, pos: Vector2, size: Vector2, theta: float) {
+  Simp.set_shader_for_images(texture);
+
+  h := Vector2.{size.x, 0};
+  v := Vector2.{0, size.y};
+
+  radians := (TAU / 360.0) * theta;
 
   h = rotate(h, radians);
   v = rotate(v, radians);
