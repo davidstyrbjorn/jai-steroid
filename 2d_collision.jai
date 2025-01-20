@@ -1,7 +1,7 @@
 #import "Math";
 
 triangle_intersect_circle :: (circle_position: Vector2, circle_radius: float, t0: Vector2, t1: Vector2, t2: Vector2) -> bool {
-  
+
   circle_radius_squared := circle_radius*circle_radius; // To avoid squaring stuff
 
   // Test 1: vertex within circle
@@ -62,4 +62,10 @@ triangle_intersect_circle :: (circle_position: Vector2, circle_radius: float, t0
   }
 
   return false; // No intersection detected
+}
+
+// Assuming circle positions are centered in the circle
+circle_intersects_circle :: (circle1_position: Vector2, circle1_radius: float, circle2_position: Vector2, circle2_radius: float) -> bool {
+    circle_to_circle := distance_squared(circle1_position, circle2_position);
+    return circle_to_circle <= circle1_radius*circle1_radius + circle2_radius*circle2_radius;
 }
