@@ -16,6 +16,10 @@ WINDOW_WIDTH :: cast(s32)(WINDOW_HEIGHT * ASPECT);
 // Just for fun.
 #assert(ASPECT >= 1);
 
+GameState :: struct {
+  game_over: bool;
+}
+
 title_font: *Simp.Dynamic_Font;
 game_font: *Simp.Dynamic_Font;
 data_folder: string;
@@ -75,48 +79,58 @@ main :: () {
   while !should_quit_game {
     reset_temporary_storage();
     update_window_events();
-    
+
     now := seconds_since_init();
     delta_time = (now - last_time).(float32);
-    last_time = now;    
+    last_time = now;
 
     /* RENDER NOW */
-    Simp.clear_render_target(0, 0, 0, 1);
-    
-    {
-      text_w := Simp.prepare_text(title_font, "asteroids");
-      text_y := WINDOW_HEIGHT - title_font.character_height;
+    if !context.game_state.game_over {
+        Simp.clear_render_target(0, 0, 0, 1);
+
+        {
+          text_w := Simp.prepare_text(title_font, "asteroids");
+          text_y := WINDOW_HEIGHT - title_font.character_height;
+          color := Vector4.{1, 1, 1, 1};
+          Simp.draw_prepared_text(title_font, 0, text_y, color);
+        }
+
+        {
+          ship_debug_str := tprint("force, velocity = {%, %}, {%, %}", ship_force.x.(s64), ship_force.y.(s64), ship_velocity.x.(s64), ship_velocity.y.(s64));
+          text_w := Simp.prepare_text(title_font, ship_debug_str);
+          text_y := WINDOW_HEIGHT - title_font.character_height*2;
+          color := Vector4.{1, 1, 1, 1};
+          Simp.draw_prepared_text(title_font, 0, text_y, color);
+        }
+
+        draw_ship();
+        draw_asteroids();
+
+        Simp.swap_buffers(window);
+
+        /* SIMULATE */
+        update_keys();
+        if key_right {
+          ship_theta -= 120.0 * delta_time;
+        }
+        else if key_left {
+          ship_theta += 120.0 * delta_time;
+        }
+        if key_space {
+          thrust_forward_ship();
+        }
+
+        simulate_ship();
+        simulate_asteroids();
+    }else {
+      Simp.clear_render_target(0, 0, 0, 1);
+      text_w := Simp.prepare_text(title_font, "Ruh, roh, game over!");
+      text_x := (WINDOW_WIDTH/2) - (text_w/2);
+      text_y := (WINDOW_HEIGHT/2) - (title_font.character_height/2);
       color := Vector4.{1, 1, 1, 1};
-      Simp.draw_prepared_text(title_font, 0, text_y, color);
+      Simp.draw_prepared_text(title_font, text_x, text_y, color);
+      Simp.swap_buffers(window);
     }
-
-    {
-      ship_debug_str := tprint("force, velocity = {%, %}, {%, %}", ship_force.x.(s64), ship_force.y.(s64), ship_velocity.x.(s64), ship_velocity.y.(s64));
-      text_w := Simp.prepare_text(title_font, ship_debug_str);
-      text_y := WINDOW_HEIGHT - title_font.character_height*2;
-      color := Vector4.{1, 1, 1, 1};
-      Simp.draw_prepared_text(title_font, 0, text_y, color);
-    }
-
-    draw_ship();
-    draw_asteroids();
-
-    Simp.swap_buffers(window);
-
-    /* SIMULATE */
-    update_keys();
-    if key_right {
-      ship_theta -= 120.0 * delta_time;
-    }
-    else if key_left {
-      ship_theta += 120.0 * delta_time;
-    }
-    if key_space {
-      thrust_forward_ship();
-    }
-
-    simulate_ship();
-    simulate_asteroids();
   }
 }
 
@@ -130,7 +144,7 @@ simulate_asteroids :: () {
   for *asteroids {
     it.theta += it.angular_velocity * delta_time;
     it.position += it.velocity * delta_time;
-    
+
     // Check collision between asteroid and ship
     h := Vector2.{ship_size.x, 0};
     v := Vector2.{0, ship_size.y};
@@ -144,7 +158,7 @@ simulate_asteroids :: () {
     t1 := ship_pos + Vector2.{ship_size.x, 0};
     t2 := ship_pos + Vector2.{ship_size.x/2, ship_size.y};
     if triangle_intersect_circle(it.position, 128, t0, t1, t2) {
-      remove it;
+      context.game_state.game_over = true;
     }
   }
 }
@@ -195,7 +209,7 @@ get_random_point_outside_of_play_area :: (thing_size: Vector2) -> Vector2 {
     case 0; // left side
       result.x = -thing_size.x;
       result.y = random_get_within_range(thing_size.y, WINDOW_HEIGHT-thing_size.y);
-    case 1; // right side 
+    case 1; // right side
       result.x = WINDOW_WIDTH.(float) + thing_size.x;
       result.y = random_get_within_range(thing_size.y, WINDOW_HEIGHT-thing_size.y);
     case 2; // top side
@@ -207,7 +221,7 @@ get_random_point_outside_of_play_area :: (thing_size: Vector2) -> Vector2 {
     case;
       print("wtf this shouldn't happen!?!?");
   }
-  
+
   return result;
 }
 
@@ -266,11 +280,13 @@ my_draw_immediate :: (texture: *Simp.Texture, pos: Vector2, size: Vector2, theta
 }
 
 init_fonts :: () {
-  TITLE_PIXEL_SIZE :: 32; 
+  TITLE_PIXEL_SIZE :: 32;
   title_font = Simp.get_font_at_size(data_folder, "0xProto-Regular.ttf", TITLE_PIXEL_SIZE);
   assert(title_font != null);
-  
+
   GAME_PIXEL_SIZE :: 16;
   game_font = Simp.get_font_at_size(data_folder, "0xProto-Regular.ttf", GAME_PIXEL_SIZE);
   assert(game_font != null);
 }
+
+#add_context game_state := GameState.{false};
