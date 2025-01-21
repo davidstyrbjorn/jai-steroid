@@ -183,20 +183,20 @@ simulate_asteroids :: () {
     it.entity.position += it.velocity * delta_time;
 
     // Check collision between asteroid and ship
-    // h := Vector2.{ship_size.x, 0};
-    // v := Vector2.{0, ship_size.y};
+    h := Vector2.{ship_size.x, 0};
+    v := Vector2.{0, ship_size.y};
 
-    // radians := (TAU / 360.0) * ship_theta;
+    radians := (TAU / 360.0) * ship_theta;
 
-    // h = rotate(h, radians);
-    // v = rotate(v, radians);
+    h = rotate(h, radians);
+    v = rotate(v, radians);
 
-    // t0 := ship_pos;
-    // t1 := ship_pos + Vector2.{ship_size.x, 0};
-    // t2 := ship_pos + Vector2.{ship_size.x/2, ship_size.y};
-    // if triangle_intersect_circle(it.position, 128, t0, t1, t2) {
-    //   context.game_state.game_over = true;
-    // }
+    t0 := ship_pos - h - v;
+    t1 := ship_pos + h - v;
+    t2 := ship_pos + v;
+    if triangle_intersect_circle(it.position, 64, t0, t1, t2) {
+      context.game_state.game_over = true;
+    }
   }
 }
 

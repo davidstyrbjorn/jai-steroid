@@ -66,6 +66,6 @@ triangle_intersect_circle :: (circle_position: Vector2, circle_radius: float, t0
 
 // Assuming circle positions are centered in the circle
 circle_intersects_circle :: (circle1_position: Vector2, circle1_radius: float, circle2_position: Vector2, circle2_radius: float) -> bool {
-    circle_to_circle := distance(circle1_position, circle2_position);
-    return circle_to_circle <= circle1_radius + circle2_radius;
+    circle_to_circle := distance_squared(circle1_position, circle2_position);
+    return circle_to_circle <= circle1_radius*circle1_radius + circle2_radius*circle2_radius;
 }
