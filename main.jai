@@ -53,6 +53,14 @@ bullet_texture: Simp.Texture;
 
 delta_time: float32;
 
+OutsideBounds :: enum {
+    LEFT;
+    RIGHT;
+    TOP;
+    BOTTOM;
+    NONE;
+}
+
 main :: () {
   base_path := path_strip_filename(get_path_of_running_executable());
   data_folder = join(base_path, "data");
@@ -92,7 +100,7 @@ main :: () {
         }
 
         {
-          ship_debug_str := tprint("outside: %", wrap_ship());
+          ship_debug_str := tprint("outside: %", ship_outside_bounds());
           text_w := Simp.prepare_text(title_font, ship_debug_str);
           text_y := WINDOW_HEIGHT - title_font.character_height*2;
           color := Vector4.{1, 1, 1, 1};
@@ -223,21 +231,13 @@ wrap_asteroid :: (asteroid: *Asteroid) {
     }
 }
 
-OutsideBounds :: enum {
-    LEFT;
-    RIGHT;
-    TOP;
-    BOTTOM;
-    NONE;
-}
-
-wrap_ship :: () -> OutsideBounds{
+ship_outside_bounds :: () -> OutsideBounds {
     out_left, out_right, out_top, out_bottom := 0;
     for vertex : get_ship_vertices() {
         if vertex.x < 0 then out_left += 1;
         if vertex.x >= WINDOW_WIDTH.(float) then out_right += 1;
-        if vertex.y < 0 then out_top += 1;
-        if vertex.y >= WINDOW_HEIGHT.(float) then out_bottom += 1;
+        if vertex.y < 0 then out_bottom += 1;
+        if vertex.y >= WINDOW_HEIGHT.(float) then out_top += 1;
     }
 
     if out_left == 3 {
@@ -255,12 +255,29 @@ wrap_ship :: () -> OutsideBounds{
     return .NONE;
 }
 
+wrap_ship :: () {
+    outside_bound := ship_outside_bounds();
+    THRESHOLD :: 4.0;
+    if outside_bound == {
+        case .LEFT;
+            ship_pos.x = WINDOW_WIDTH.(float);
+        case .RIGHT;
+            ship_pos.x = THRESHOLD;
+        case .BOTTOM;
+            ship_pos.y = WINDOW_HEIGHT.(float);
+        case .TOP;
+            ship_pos.y = THRESHOLD;
+    }
+}
+
 simulate_ship :: () {
   damping_force := -2.5 * ship_force * delta_time;
   ship_force += damping_force;
 
   ship_velocity = ship_force * delta_time;
   ship_pos += ship_velocity;
+
+  wrap_ship();
 }
 
 thrust_forward_ship :: () {
