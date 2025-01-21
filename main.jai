@@ -92,7 +92,7 @@ main :: () {
         }
 
         {
-          ship_debug_str := tprint("force, velocity = {%, %}, {%, %}", ship_force.x.(s64), ship_force.y.(s64), ship_velocity.x.(s64), ship_velocity.y.(s64));
+          ship_debug_str := tprint("outside: %", wrap_ship());
           text_w := Simp.prepare_text(title_font, ship_debug_str);
           text_y := WINDOW_HEIGHT - title_font.character_height*2;
           color := Vector4.{1, 1, 1, 1};
@@ -171,6 +171,22 @@ simulate_bullets :: () {
     }
 }
 
+get_ship_vertices :: () -> [3]Vector2 {
+    result: [3]Vector2;
+    h := Vector2.{ship_size.x, 0};
+    v := Vector2.{0, ship_size.y};
+
+    radians := (TAU / 360.0) * ship_theta;
+
+    h = rotate(h, radians);
+    v = rotate(v, radians);
+
+    result[0] = ship_pos - h - v;
+    result[1] = ship_pos + h - v;
+    result[2] = ship_pos + v;
+    return result;
+}
+
 simulate_asteroids :: () {
   time_until_asteroid_spawn -= delta_time;
   if time_until_asteroid_spawn < 0.0 {
@@ -181,23 +197,62 @@ simulate_asteroids :: () {
   for *asteroids {
     it.entity.theta += it.angular_velocity * delta_time;
     it.entity.position += it.velocity * delta_time;
+    wrap_asteroid(it);
 
-    // Check collision between asteroid and ship
-    h := Vector2.{ship_size.x, 0};
-    v := Vector2.{0, ship_size.y};
-
-    radians := (TAU / 360.0) * ship_theta;
-
-    h = rotate(h, radians);
-    v = rotate(v, radians);
-
-    t0 := ship_pos - h - v;
-    t1 := ship_pos + h - v;
-    t2 := ship_pos + v;
-    if triangle_intersect_circle(it.position, 64, t0, t1, t2) {
+    vertices := get_ship_vertices();
+    if triangle_intersect_circle(it.position, 64, vertices[0], vertices[1], vertices[2]) {
       context.game_state.game_over = true;
     }
   }
+}
+
+wrap_asteroid :: (asteroid: *Asteroid) {
+    pos := *asteroid.position;
+    radius := asteroid.size.x;
+    THRESHOLD :: 3.0; // in pixels
+    if pos.x + radius < -THRESHOLD {
+        pos.x = WINDOW_WIDTH + radius;
+    } else if pos.x - radius >= WINDOW_WIDTH.(float) + THRESHOLD {
+        pos.x = -radius;
+    }
+
+    if pos.y + radius < -THRESHOLD {
+        pos.y = WINDOW_HEIGHT + radius;
+    }else if pos.y - radius >= WINDOW_HEIGHT.(float) + THRESHOLD {
+        pos.y = -radius;
+    }
+}
+
+OutsideBounds :: enum {
+    LEFT;
+    RIGHT;
+    TOP;
+    BOTTOM;
+    NONE;
+}
+
+wrap_ship :: () -> OutsideBounds{
+    out_left, out_right, out_top, out_bottom := 0;
+    for vertex : get_ship_vertices() {
+        if vertex.x < 0 then out_left += 1;
+        if vertex.x >= WINDOW_WIDTH.(float) then out_right += 1;
+        if vertex.y < 0 then out_top += 1;
+        if vertex.y >= WINDOW_HEIGHT.(float) then out_bottom += 1;
+    }
+
+    if out_left == 3 {
+        return .LEFT;
+    }
+    else if out_right == 3 {
+        return .RIGHT;
+    }
+    else if out_top == 3 {
+        return .TOP;
+    }
+    else if out_bottom == 3 {
+        return .BOTTOM;
+    }
+    return .NONE;
 }
 
 simulate_ship :: () {
@@ -241,6 +296,7 @@ load_texture :: (name: string) -> Simp.Texture, bool {
 
 get_random_point_outside_of_play_area :: (thing_size: Vector2) -> Vector2 {
   side := random_get_within_range(0, 3.999).(u8); // Ugly
+  radius := thing_size.x;
   result: Vector2;
   if side == {
     case 0; // left side
