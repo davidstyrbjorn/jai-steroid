@@ -163,9 +163,7 @@ simulate_bullets :: () {
     for *bullet : bullets {
         bullet.entity.position += bullet.forward_vector * bullet_speed * delta_time;
         for *asteroid : asteroids {
-            bullet_center := bullet.position;
-            asteroid_center := asteroid.position;
-            if circle_intersects_circle(bullet_center, bullet.size.x/2, asteroid_center, asteroid.size.x/2) {
+            if circle_intersects_circle(bullet.position, bullet.size.x, asteroid.position, asteroid.size.x) {
                 remove asteroid;
                 remove bullet;
             }
@@ -266,7 +264,7 @@ get_random_point_outside_of_play_area :: (thing_size: Vector2) -> Vector2 {
 
 spawn_asteroid :: (type: int) {
   asteroid: Asteroid;
-  asteroid.entity.size = Vector2.{128, 128};
+  asteroid.entity.size = Vector2.{64, 64};
   asteroid.entity.position = get_random_point_outside_of_play_area(asteroid.entity.size);
   asteroid.entity.texture = *asteroid_textures[type];
   asteroid.entity.theta = 0;
