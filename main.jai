@@ -6,6 +6,7 @@ Simp :: #import "Simp";
 #import "Math";
 #import "Input";
 #import "Random";
+using Sound :: #import "Sound_Player";
 
 #load "2d_collision.jai";
 #load "entities.jai";
@@ -18,7 +19,7 @@ WINDOW_WIDTH :: cast(s32)(WINDOW_HEIGHT * ASPECT);
 #assert(ASPECT >= 1);
 
 GameState :: struct {
-  game_over: bool;
+    game_over: bool;
 }
 
 title_font: *Simp.Dynamic_Font;
@@ -61,90 +62,110 @@ OutsideBounds :: enum {
     NONE;
 }
 
+game_music: Sound_Data;
+
 main :: () {
-  base_path := path_strip_filename(get_path_of_running_executable());
-  data_folder = join(base_path, "data");
+    base_path := path_strip_filename(get_path_of_running_executable());
+    data_folder = join(base_path, "data");
 
-  window := create_window(window_name="Asteroids", width=WINDOW_WIDTH, height=WINDOW_HEIGHT);
-  Simp.set_render_target(window);
+    window := create_window(window_name="Asteroids", width=WINDOW_WIDTH, height=WINDOW_HEIGHT);
+    Simp.set_render_target(window);
 
-  seed := to_calendar(current_time_consensus()).millisecond;
-  random_seed(seed.(u64));
+    seed := to_calendar(current_time_consensus()).millisecond;
+    random_seed(seed.(u64));
 
-  init_textures();
-  init_fonts();
+    init_textures();
+    init_fonts();
 
-  delta_time = 0.016;
-  last_time: float64 = 0;
+    delta_time = 0.016;
+    last_time: float64 = 0;
 
-  // Alloc some space up front for our asteroids array
-  array_resize(*asteroids, 250);
-
-  while !should_quit_game {
-    reset_temporary_storage();
-    update_window_events();
-
-    now := seconds_since_init();
-    delta_time = (now - last_time).(float32);
-    last_time = now;
-
-    /* RENDER NOW */
-    if !context.game_state.game_over {
-        Simp.clear_render_target(0, 0, 0, 1);
-
-        {
-          text_w := Simp.prepare_text(title_font, "asteroids");
-          text_y := WINDOW_HEIGHT - title_font.character_height;
-          color := Vector4.{1, 1, 1, 1};
-          Simp.draw_prepared_text(title_font, 0, text_y, color);
+    success := sound_player_init(.{update_from_a_thread = true});
+    {
+        name := tprint("%/game_music.ogg", data_folder);
+        print("Loading %\n", name);
+        game_music = load_audio_file(name);
+        if !game_music.loaded {
+            print("Could not load game music: %\n", name);
+            exit(1);
         }
 
-        {
-          ship_debug_str := tprint("outside: %", ship_outside_bounds());
-          text_w := Simp.prepare_text(title_font, ship_debug_str);
-          text_y := WINDOW_HEIGHT - title_font.character_height*2;
-          color := Vector4.{1, 1, 1, 1};
-          Simp.draw_prepared_text(title_font, 0, text_y, color);
-        }
-
-        draw_ship();
-        for asteroids {
-            my_draw_immediate(*asteroid_textures[it.type], it.position, it.size, it.theta);
-        }
-        for bullets {
-            my_draw_immediate(*bullet_texture, it.position, it.size, it.theta);
-        }
-
-        Simp.swap_buffers(window);
-
-        /* SIMULATE */
-        update_keys();
-        if key_right {
-          ship_theta -= 120.0 * delta_time;
-        }
-        else if key_left {
-          ship_theta += 120.0 * delta_time;
-        }
-        if key_space {
-          thrust_forward_ship();
-        }
-        if key_shift {
-          spawn_ship_bullet();
-        }
-
-        simulate_bullets();
-        simulate_ship();
-        simulate_asteroids();
-    }else {
-      Simp.clear_render_target(0, 0, 0, 1);
-      text_w := Simp.prepare_text(title_font, "Ruh, roh, game over!");
-      text_x := (WINDOW_WIDTH/2) - (text_w/2);
-      text_y := (WINDOW_HEIGHT/2) - (title_font.character_height/2);
-      color := Vector4.{1, 1, 1, 1};
-      Simp.draw_prepared_text(title_font, text_x, text_y, color);
-      Simp.swap_buffers(window);
+        stream := make_stream(*game_music, .MUSIC);
+        set_repeating(stream, true);
+        stream.user_volume_scale *= 1;
+        start_playing(stream);
     }
-  }
+
+    // Alloc some space up front for our asteroids array
+    array_resize(*asteroids, 250);
+
+    while !should_quit_game {
+        reset_temporary_storage();
+        update_window_events();
+
+        now := seconds_since_init();
+        delta_time = (now - last_time).(float32);
+        last_time = now;
+
+        /* RENDER NOW */
+        if !context.game_state.game_over {
+            Simp.clear_render_target(0, 0, 0, 1);
+
+            {
+                text_w := Simp.prepare_text(title_font, "asteroids");
+                text_y := WINDOW_HEIGHT - title_font.character_height;
+                color := Vector4.{1, 1, 1, 1};
+                Simp.draw_prepared_text(title_font, 0, text_y, color);
+            }
+
+            {
+                ship_debug_str := tprint("outside: %", ship_outside_bounds());
+                text_w := Simp.prepare_text(title_font, ship_debug_str);
+                text_y := WINDOW_HEIGHT - title_font.character_height*2;
+                color := Vector4.{1, 1, 1, 1};
+                Simp.draw_prepared_text(title_font, 0, text_y, color);
+            }
+
+            draw_ship();
+            for asteroids {
+                my_draw_immediate(*asteroid_textures[it.type], it.position, it.size, it.theta);
+            }
+            for bullets {
+                my_draw_immediate(*bullet_texture, it.position, it.size, it.theta);
+            }
+
+            Simp.swap_buffers(window);
+
+            /* SIMULATE */
+            update_keys();
+            if key_right {
+                ship_theta -= 150.0 * delta_time;
+            }
+            else if key_left {
+                ship_theta += 150.0 * delta_time;
+            }
+            if key_space {
+                thrust_forward_ship();
+            }
+            if key_shift {
+                spawn_ship_bullet();
+            }
+
+            simulate_bullets();
+            simulate_ship();
+            simulate_asteroids();
+        }else {
+            Simp.clear_render_target(0, 0, 0, 1);
+            text_w := Simp.prepare_text(title_font, "Ruh, roh, game over!");
+            text_x := (WINDOW_WIDTH/2) - (text_w/2);
+            text_y := (WINDOW_HEIGHT/2) - (title_font.character_height/2);
+            color := Vector4.{1, 1, 1, 1};
+            Simp.draw_prepared_text(title_font, text_x, text_y, color);
+            Simp.swap_buffers(window);
+        }
+    }
+
+    sound_player_shutdown();
 }
 
 spawn_ship_bullet :: () {
@@ -196,22 +217,33 @@ get_ship_vertices :: () -> [3]Vector2 {
 }
 
 simulate_asteroids :: () {
-  time_until_asteroid_spawn -= delta_time;
-  if time_until_asteroid_spawn < 0.0 {
-    time_until_asteroid_spawn = 4.0;
-    spawn_asteroid(MEDIUM_ATEROID);
-  }
-
-  for *asteroids {
-    it.entity.theta += it.angular_velocity * delta_time;
-    it.entity.position += it.velocity * delta_time;
-    wrap_asteroid(it);
-
-    vertices := get_ship_vertices();
-    if triangle_intersect_circle(it.position, 64, vertices[0], vertices[1], vertices[2]) {
-      context.game_state.game_over = true;
+    time_until_asteroid_spawn -= delta_time;
+    if time_until_asteroid_spawn < 0.0 {
+        time_until_asteroid_spawn = 2.0;
+        spawn_asteroid(MEDIUM_ATEROID);
     }
-  }
+
+    for *asteroid : asteroids {
+        asteroid.entity.theta += asteroid.angular_velocity * delta_time;
+        asteroid.entity.position += asteroid.velocity * delta_time;
+
+        // Wraps the asteroid around the window if its out of bounds
+        wrap_asteroid(asteroid);
+
+        // Check for collision with player
+        vertices := get_ship_vertices();
+        if triangle_intersect_circle(asteroid.position, asteroid.size.x, vertices[0], vertices[1], vertices[2]) {
+            context.game_state.game_over = true;
+        }
+
+        for *asteroid2 : asteroids {
+            if asteroid == asteroid2 continue; // Skip self collision
+
+            if circle_intersects_circle(asteroid.position, asteroid.size.x, asteroid2.position, asteroid2.size.x) {
+                resolve_asteroid_collision(asteroid, asteroid2);
+            }
+        }
+    }
 }
 
 wrap_asteroid :: (asteroid: *Asteroid) {
@@ -260,127 +292,127 @@ wrap_ship :: () {
     THRESHOLD :: 4.0;
     if outside_bound == {
         case .LEFT;
-            ship_pos.x = WINDOW_WIDTH.(float);
+        ship_pos.x = WINDOW_WIDTH.(float);
         case .RIGHT;
-            ship_pos.x = THRESHOLD;
+        ship_pos.x = THRESHOLD;
         case .BOTTOM;
-            ship_pos.y = WINDOW_HEIGHT.(float);
+        ship_pos.y = WINDOW_HEIGHT.(float);
         case .TOP;
-            ship_pos.y = THRESHOLD;
+        ship_pos.y = THRESHOLD;
     }
 }
 
 simulate_ship :: () {
-  damping_force := -2.5 * ship_force * delta_time;
-  ship_force += damping_force;
+    damping_force := -2.5 * ship_force * delta_time;
+    ship_force += damping_force;
 
-  ship_velocity = ship_force * delta_time;
-  ship_pos += ship_velocity;
+    ship_velocity = ship_force * delta_time;
+    ship_pos += ship_velocity;
 
-  wrap_ship();
+    wrap_ship();
 }
 
 thrust_forward_ship :: () {
-  up_vector := Vector2.{0, 1};
-  radians := (TAU / 360.0) * ship_theta;
-  forward_vector := rotate(up_vector, radians);
-  ship_force += forward_vector * 1000.0 * delta_time;
+    up_vector := Vector2.{0, 1};
+    radians := (TAU / 360.0) * ship_theta;
+    forward_vector := rotate(up_vector, radians);
+    ship_force += forward_vector * 1000.0 * delta_time;
 }
 
 update_keys :: inline () {
-  for event : events_this_frame {
-    if event.type == .QUIT {
-        should_quit_game = true;
-        break;
-    }
+    for event : events_this_frame {
+        if event.type == .QUIT {
+            should_quit_game = true;
+            break;
+        }
 
-    if event.type == .KEYBOARD {
-      key := event.key_code;
-      if key == .ARROW_LEFT  then key_left  = event.key_pressed.(bool);
-      if key == .ARROW_RIGHT then key_right = event.key_pressed.(bool);
-      if key == .SPACEBAR    then key_space = event.key_pressed.(bool);
-      if key == .SHIFT       then key_shift = event.key_pressed.(bool);
+        if event.type == .KEYBOARD {
+            key := event.key_code;
+            if key == .ARROW_LEFT  then key_left  = event.key_pressed.(bool);
+            if key == .ARROW_RIGHT then key_right = event.key_pressed.(bool);
+            if key == .SPACEBAR    then key_space = event.key_pressed.(bool);
+            if key == .SHIFT       then key_shift = event.key_pressed.(bool);
+        }
     }
-  }
 }
 
 load_texture :: (name: string) -> Simp.Texture, bool {
-  file_name := tprint("%/%", data_folder, name);
-  result: Simp.Texture;
-  success := Simp.texture_load_from_file(*result, file_name);
-  return result, success;
+    file_name := tprint("%/%", data_folder, name);
+    result: Simp.Texture;
+    success := Simp.texture_load_from_file(*result, file_name);
+    return result, success;
 }
 
 get_random_point_outside_of_play_area :: (thing_size: Vector2) -> Vector2 {
-  side := random_get_within_range(0, 3.999).(u8); // Ugly
-  radius := thing_size.x;
-  result: Vector2;
-  if side == {
-    case 0; // left side
-      result.x = -thing_size.x;
-      result.y = random_get_within_range(thing_size.y, WINDOW_HEIGHT-thing_size.y);
-    case 1; // right side
-      result.x = WINDOW_WIDTH.(float) + thing_size.x;
-      result.y = random_get_within_range(thing_size.y, WINDOW_HEIGHT-thing_size.y);
-    case 2; // top side
-      result.x = random_get_within_range(0, WINDOW_WIDTH-thing_size.x);
-      result.y = WINDOW_HEIGHT + thing_size.y;
-    case 3; // bottom side
-      result.x = random_get_within_range(0, WINDOW_WIDTH-thing_size.x);
-      result.y = -thing_size.y;
-    case;
-      print("wtf this shouldn't happen!?!?");
-  }
+    side := random_get_within_range(0, 3.999).(u8); // Ugly
+    radius := thing_size.x;
+    result: Vector2;
+    if side == {
+        case 0; // left side
+        result.x = -thing_size.x;
+        result.y = random_get_within_range(thing_size.y, WINDOW_HEIGHT-thing_size.y);
+        case 1; // right side
+        result.x = WINDOW_WIDTH.(float) + thing_size.x;
+        result.y = random_get_within_range(thing_size.y, WINDOW_HEIGHT-thing_size.y);
+        case 2; // top side
+        result.x = random_get_within_range(0, WINDOW_WIDTH-thing_size.x);
+        result.y = WINDOW_HEIGHT + thing_size.y;
+        case 3; // bottom side
+        result.x = random_get_within_range(0, WINDOW_WIDTH-thing_size.x);
+        result.y = -thing_size.y;
+        case;
+        print("wtf this shouldn't happen!?!?");
+    }
 
-  return result;
+    return result;
 }
 
 spawn_asteroid :: (type: int) {
-  asteroid: Asteroid;
-  asteroid.entity.size = Vector2.{64, 64};
-  asteroid.entity.position = get_random_point_outside_of_play_area(asteroid.entity.size);
-  asteroid.entity.texture = *asteroid_textures[type];
-  asteroid.entity.theta = 0;
+    asteroid: Asteroid;
+    asteroid.entity.size = Vector2.{64, 64};
+    asteroid.entity.position = get_random_point_outside_of_play_area(asteroid.entity.size);
+    asteroid.entity.texture = *asteroid_textures[type];
+    asteroid.entity.theta = 0;
 
-  center := Vector2.{(WINDOW_WIDTH/2).(float), (WINDOW_HEIGHT/2).(float)};
-  asteroid.type = MEDIUM_ATEROID;
-  asteroid.velocity = normalize(center - asteroid.entity.position) * 100.0;
-  asteroid.angular_velocity = random_get_within_range(-50.0, 50.0);
+    center := Vector2.{(WINDOW_WIDTH/2).(float), (WINDOW_HEIGHT/2).(float)};
+    asteroid.type = MEDIUM_ATEROID;
+    asteroid.velocity = normalize(center - asteroid.entity.position) * 100.0;
+    asteroid.angular_velocity = random_get_within_range(-50.0, 50.0);
 
-  array_add(*asteroids, asteroid);
+    array_add(*asteroids, asteroid);
 }
 
 init_textures :: () {
-  ship_texture = load_texture("ship.png");
+    ship_texture = load_texture("ship.png");
 
-  // asteroid_textures[SMALL_ASTEROID] = load_texture("");
-  asteroid_textures[MEDIUM_ATEROID] = load_texture("asteroid-256-256.png");
-  // asteroid_textures[SMALL_ASTEROID] = load_texture("");
+    // asteroid_textures[SMALL_ASTEROID] = load_texture("");
+    asteroid_textures[MEDIUM_ATEROID] = load_texture("asteroid-256-256.png");
+    // asteroid_textures[SMALL_ASTEROID] = load_texture("");
 
-  bullet_texture = load_texture("bullet.png");
+    bullet_texture = load_texture("bullet.png");
 }
 
 draw_ship :: () {
-  my_draw_immediate(*ship_texture, ship_pos, ship_size, ship_theta);
+    my_draw_immediate(*ship_texture, ship_pos, ship_size, ship_theta);
 }
 
 my_draw_immediate :: (texture: *Simp.Texture, pos: Vector2, size: Vector2, theta: float) {
-  Simp.set_shader_for_images(texture);
+    Simp.set_shader_for_images(texture);
 
-  h := Vector2.{size.x, 0};
-  v := Vector2.{0, size.y};
+    h := Vector2.{size.x, 0};
+    v := Vector2.{0, size.y};
 
-  radians := (TAU / 360.0) * theta;
+    radians := (TAU / 360.0) * theta;
 
-  h = rotate(h, radians);
-  v = rotate(v, radians);
+    h = rotate(h, radians);
+    v = rotate(v, radians);
 
-  p0 := pos - h - v;
-  p1 := pos + h - v;
-  p2 := pos + h + v;
-  p3 := pos - h + v;
+    p0 := pos - h - v;
+    p1 := pos + h - v;
+    p2 := pos + h + v;
+    p3 := pos - h + v;
 
-  Simp.immediate_quad(p0, p1, p2, p3,  Vector4.{1, 1, 1, 1});
+    Simp.immediate_quad(p0, p1, p2, p3,  Vector4.{1, 1, 1, 1});
 }
 
 my_draw_immediate :: (pos: Vector2, size: Vector2, color: Vector4 = Vector4.{1, 0, 0, 1}) {
@@ -395,13 +427,13 @@ my_draw_immediate :: (pos: Vector2, size: Vector2, color: Vector4 = Vector4.{1, 
 }
 
 init_fonts :: () {
-  TITLE_PIXEL_SIZE :: 32;
-  title_font = Simp.get_font_at_size(data_folder, "0xProto-Regular.ttf", TITLE_PIXEL_SIZE);
-  assert(title_font != null);
+    TITLE_PIXEL_SIZE :: 32;
+    title_font = Simp.get_font_at_size(data_folder, "0xProto-Regular.ttf", TITLE_PIXEL_SIZE);
+    assert(title_font != null);
 
-  GAME_PIXEL_SIZE :: 16;
-  game_font = Simp.get_font_at_size(data_folder, "0xProto-Regular.ttf", GAME_PIXEL_SIZE);
-  assert(game_font != null);
+    GAME_PIXEL_SIZE :: 16;
+    game_font = Simp.get_font_at_size(data_folder, "0xProto-Regular.ttf", GAME_PIXEL_SIZE);
+    assert(game_font != null);
 }
 
 #add_context game_state := GameState.{false};

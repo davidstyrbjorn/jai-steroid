@@ -67,5 +67,37 @@ triangle_intersect_circle :: (circle_position: Vector2, circle_radius: float, t0
 // Assuming circle positions are centered in the circle
 circle_intersects_circle :: (circle1_position: Vector2, circle1_radius: float, circle2_position: Vector2, circle2_radius: float) -> bool {
     circle_to_circle := distance_squared(circle1_position, circle2_position);
-    return circle_to_circle <= circle1_radius*circle1_radius + circle2_radius*circle2_radius;
+    radius_sum := circle1_radius + circle2_radius;
+    return circle_to_circle <= radius_sum * radius_sum;
+}
+
+resolve_asteroid_collision :: (a1: *Asteroid, a2: *Asteroid) {
+    // Calculate a direction between asteroids  and a tangential vector.
+    n := normalize(a2.position - a1.position);
+    t := Vector2.{-n.y, n.x};
+
+    // Resolve overlap
+    // {
+    //     dist := length(a2.position - a1.position);
+    //     overlap := (a1.size.x + a2.size.y) - dist;
+    //     if overlap > 0.0 {
+    //         correction := n * (overlap / 2.0);
+    //         a1.position -= correction;
+    //         a2.position += correction;
+    //     }
+    // }
+
+    // decompose velocities
+    v1n := dot(a1.velocity, n);
+    v1t := dot(a1.velocity, t);
+    v2n := dot(a2.velocity, n);
+    v2t := dot(a2.velocity, t);
+
+    // swap normal velocity components.
+    v1n_prime := v2n;
+    v2n_prime := v1n;
+
+    // recombine new velocities.
+    a1.velocity= v1n_prime * n + v1t * t;
+    a2.velocity= v2n_prime * n + v2t * t;
 }
