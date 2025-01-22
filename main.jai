@@ -63,6 +63,11 @@ OutsideBounds :: enum {
 }
 
 game_music: Sound_Data;
+game_end_music: Sound_Data;
+game_end_music_stream: *Sound_Stream;
+
+sound_bullet:           Sound_Data;
+sound_asteroid_explode: Sound_Data;
 
 main :: () {
     base_path := path_strip_filename(get_path_of_running_executable());
@@ -83,18 +88,39 @@ main :: () {
     success := sound_player_init(.{update_from_a_thread = true});
     {
         name := tprint("%/game_music.ogg", data_folder);
-        print("Loading %\n", name);
         game_music = load_audio_file(name);
         if !game_music.loaded {
             print("Could not load game music: %\n", name);
             exit(1);
         }
 
-        stream := make_stream(*game_music, .MUSIC);
-        set_repeating(stream, true);
-        stream.user_volume_scale *= 1;
-        start_playing(stream);
+        game_music_stream := make_stream(*game_music, .MUSIC);
+        set_repeating(game_music_stream, true);
+        game_music_stream.user_volume_scale *= 0.4;
+        start_playing(game_music_stream);
+
+        name = tprint("%/game_end_music.ogg", data_folder);
+        game_end_music = load_audio_file(name);
+        if !game_end_music.loaded {
+            print("Could not load game end music: %\n", name);
+            exit(1);
+        }
+
+        game_end_music_stream = make_stream(*game_end_music, .MUSIC);
+        set_repeating(game_end_music_stream, false);
+        game_end_music_stream.user_volume_scale *= 0.65;
     }
+
+    // Load sound effects (stolen from the invaders example game!)
+    load_sound :: (basename: string) -> Sound_Data {
+        name := tprint("%/%.wav", data_folder, basename);
+        data := load_audio_file(name);
+        if !data.loaded exit(1);
+        return data;
+    }
+
+    sound_bullet = load_sound("player_shoot");
+    sound_asteroid_explode = load_sound("asteroid_explode");
 
     // Alloc some space up front for our asteroids array
     array_resize(*asteroids, 250);
@@ -154,7 +180,7 @@ main :: () {
             simulate_bullets();
             simulate_ship();
             simulate_asteroids();
-        }else {
+        } else {
             Simp.clear_render_target(0, 0, 0, 1);
             text_w := Simp.prepare_text(title_font, "Ruh, roh, game over!");
             text_x := (WINDOW_WIDTH/2) - (text_w/2);
@@ -163,6 +189,7 @@ main :: () {
             Simp.draw_prepared_text(title_font, text_x, text_y, color);
             Simp.swap_buffers(window);
         }
+        Sound.update();
     }
 
     sound_player_shutdown();
@@ -182,8 +209,10 @@ spawn_ship_bullet :: () {
     bullet.forward_vector = rotate(up_vector, radians);
     some_offset :: 20;
     bullet.entity.position = ship_pos + bullet.forward_vector * some_offset;
-
     array_add(*bullets, bullet);
+
+    play_sound(*sound_bullet, 0.3);
+
     bullet_cooldown = 1.0;
 }
 
@@ -195,9 +224,17 @@ simulate_bullets :: () {
             if circle_intersects_circle(bullet.position, bullet.size.x, asteroid.position, asteroid.size.x) {
                 remove asteroid;
                 remove bullet;
+                play_sound(*sound_asteroid_explode, 0.3);
             }
         }
     }
+}
+
+play_sound :: (data: *Sound_Data, volume := 0.4,  category := Sound_Category.GENERAL_SFX) -> *Sound_Stream {
+    stream := Sound.make_stream(data, category);
+    stream.user_volume_scale = volume;
+    start_playing(stream);
+    return stream;
 }
 
 get_ship_vertices :: () -> [3]Vector2 {
@@ -234,6 +271,8 @@ simulate_asteroids :: () {
         vertices := get_ship_vertices();
         if triangle_intersect_circle(asteroid.position, asteroid.size.x, vertices[0], vertices[1], vertices[2]) {
             context.game_state.game_over = true;
+            stop_stream_abruptly(*game_music);
+            start_playing(game_end_music_stream);
         }
 
         for *asteroid2 : asteroids {
